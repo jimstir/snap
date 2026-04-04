@@ -28,3 +28,11 @@ Temporary Items
 # Node
 node_modules/
 .env
+
+# Hardhat
+artifacts/
+cache/
+typechain-types/
+
+# Foundry
+out/
