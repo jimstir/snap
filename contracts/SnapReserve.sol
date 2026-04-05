@@ -7,7 +7,7 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "../interfaces/ISnapToken.sol";
+import "./interfaces/ISnapToken.sol";
 
 contract SnapReserve is ERC4626 {
     using SafeERC20 for IERC20;
@@ -23,7 +23,7 @@ contract SnapReserve is ERC4626 {
     event proposalC(
         uint256 indexed proposalNum,
         bool indexed closed,
-        address closer
+        address indexed closer
     );
     /// Deposit to proposal made
     /// dev proposlClose event
@@ -52,6 +52,8 @@ contract SnapReserve is ERC4626 {
         address policy; // the identity policy for this proposal
         IERC20 token; // token being deposited
         uint256 time; // time of proposalOpen
+        uint256 withdraw; // amount to be withdrawn (added for getProposalInfo)
+        address receiver; // receiver address (added for getProposalInfo)
     }
 
     struct UserDeposit {
@@ -60,6 +62,7 @@ contract SnapReserve is ERC4626 {
         address owner; // address of contract or wallet
         uint256 time; // time of deposit
         uint256 proposalNum;
+        uint256 num;
     }
 
     address private _tOwner;
@@ -70,7 +73,7 @@ contract SnapReserve is ERC4626 {
     address private _usageAddr;
 
     address private _reserve;
-    IERC20 private _reserveToken;
+    IERC20 private _snapToken;
 
     mapping(address => bool) private _authUsers;
     mapping(uint256 => uint256) private _totalShares;
@@ -81,19 +84,19 @@ contract SnapReserve is ERC4626 {
     // proposal Accounting
     mapping(uint256 => proposalAccount) internal proposalBook;
 
-    /**  Record deposits for reference
+    //Record deposits for reference
     mapping(uint256 => UserDeposit) internal addFunds;
-    */
+
 
     bool private _allowInternal = false;
 
     constructor(
-        IERC20 tToken,
+        IERC20 token,
         string memory name,
         string memory symbol
-    ) ERC20(name, symbol) ERC4626(tToken) {
+    ) ERC20(name, symbol) ERC4626(token) {
         _tOwner = msg.sender;
-        _treasuryToken = tToken;
+        _snapToken = token;
     }
 
     /** @dev Primary authorized user modifier */
@@ -105,14 +108,14 @@ contract SnapReserve is ERC4626 {
     /** @dev Get the reserve name
      *
      */
-    function reserveAddress() public view returns (string memory) {
+    function reserveAddress() public view returns (address) {
         return _reserve;
     }
     /** @dev Get the reserve token address
      *
      */
     function reserveToken() public view returns (address) {
-        return address(_reserveToken);
+        return address(_snapToken);
     }
 
     /**
@@ -183,9 +186,7 @@ contract SnapReserve is ERC4626 {
      * @return withdrawAmount Amount withdrawn
      * @return receiver Receiver address
      */
-    function getProposalInfo(
-        uint256 proposal
-    )
+    function getProposalInfo(uint256 proposal)
         external
         view
         returns (address token, uint256 withdrawAmount, address receiver)
@@ -208,11 +209,11 @@ contract SnapReserve is ERC4626 {
         return _closedProposals[proposal];
     }
     // View identity contract address
-    function getIdentityAddress() public view returns(address){
+    function getIdentityAddress() public view returns (address) {
         return _identityAddr;
     }
     // View usuage contract address
-    function getUsageAddress() public view returns(address){
+    function getUsageAddress() public view returns (address) {
         return _usageAddr;
     }
     /**
@@ -222,16 +223,14 @@ contract SnapReserve is ERC4626 {
         return a + b;
     }
     //add the identity contract address
-    function addIdentityAddr(address id) external auth{
+    function addIdentityAddr(address id) external auth {
         _identityAddr = id;
     }
 
     //add the usuage contract address
-    function addUsuageAddr(address id) external auth{
+    function addUsuageAddr(address id) external auth {
         _usageAddr = id;
     }
-
-
 
     /** @dev Make a deposit to proposal creating new shares
      * - MUST be open proposal
@@ -293,7 +292,7 @@ contract SnapReserve is ERC4626 {
      * - MUST NOT have a userDeposit amount less than or equal to userWithdrew amount
      * @param assets amount of shares being returned
      * @param receiver address of depositor
-     * @param owner the address to receive the treasury token
+     * @param owner the address to receive the reserve token
      * @param proposal the number to closed proposal
      */
     function proposalWithdraw(
@@ -301,8 +300,7 @@ contract SnapReserve is ERC4626 {
         address receiver,
         address owner,
         uint256 proposal
-    ) external virtual (uint256) {
-        require(closedProposal(proposal), "Proposal not closed");
+    ) external virtual returns (uint256) {
         require(
             userWithdrew(receiver, proposal) >= userDeposit(receiver, proposal),
             "Invalid withdraw amount for proposal"
@@ -330,7 +328,7 @@ contract SnapReserve is ERC4626 {
         address owner,
         uint256 proposal
     ) external virtual returns (uint256) {
-        require(closedProposal(proposal), "Proposal not closed");
+        //require(closedProposal(proposal), "Proposal not closed");
         require(
             userWithdrew(receiver, proposal) <= userDeposit(receiver, proposal),
             "Invalid redeem amount for proposal"
@@ -352,19 +350,20 @@ contract SnapReserve is ERC4626 {
      * @param amount token amount being withdrawn
      * @param policy the policy address
      * @param token the token address
-     * 
+     *
      */
-    function proposalOpen(uint256 amount, address policy, IERC20 token
+    function proposalOpen(
+        uint256 amount,
+        address policy,
+        IERC20 token
     ) external virtual auth returns (uint256) {
-        
         uint256 num = proposalCheck() + 1;
         proposalBook[num].token = token;
         proposalBook[num].withdraw = amount;
         proposalBook[num].policy = policy;
         _proposalNum = num;
 
-        proposalDeposit(amount, policy, _proposalNum);
-        emit proposalO(address(token), num, amount, receiver);
+        emit proposalO(address(token), num, amount, policy);
         return (num);
     }
     /** @dev Close an opened proposal
@@ -372,7 +371,9 @@ contract SnapReserve is ERC4626 {
      * - MUST proposal must be greater than current proposal
      * @param proposal number of desired proposal to close
      */
-    function proposalClose(uint256 proposal) external virtual auth returns (bool) {
+    function proposalClose(
+        uint256 proposal
+    ) external virtual auth returns (bool) {
         require(proposalCheck() >= proposal, "Invalid proposal");
         require(!closedProposal(proposal), "Already closed");
 
@@ -401,7 +402,7 @@ contract SnapReserve is ERC4626 {
         deposits.owner = sender;
 
         SafeERC20.safeTransferFrom(token, sender, address(this), amount);
-        emit FundsAdded(address(token), amount, block.timestamp, sender);
+        // emit FundsAdded(address(token), amount, block.timestamp, sender);
         return true;
     }
 

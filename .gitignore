@@ -36,3 +36,14 @@ typechain-types/
 
 # Foundry
 out/
+
+# React Simulation
+simulation/node_modules/
+simulation/dist/
+simulation/.env.local
+simulation/.env.development.local
+simulation/.env.test.local
+simulation/.env.production.local
+simulation/npm-debug.log*
+simulation/yarn-debug.log*
+simulation/yarn-error.log*

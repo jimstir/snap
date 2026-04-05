@@ -3,7 +3,12 @@ require("dotenv").config();
 
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
-  solidity: "0.8.28",
+  solidity: {
+    version: "0.8.28",
+    settings: {
+      evmVersion: "cancun"
+    }
+  },
   networks: {
     arc: {
       url: process.env.ARC_TESTNET_RPC_URL || "https://rpc.testnet.arc.network",

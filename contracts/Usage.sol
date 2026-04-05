@@ -2,37 +2,14 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
-import "./Identity.sol";
-
-interface ISnapReserve {
-    function proposalWithdraw(
-        uint256 assets,
-        address receiver,
-        address owner,
-        uint256 proposal
-    ) external returns (uint256);
-}
+import "./interfaces/IIdentity.sol";
+import "./interfaces/ISnapReserve.sol";
 
 /**
  * @title Usage
- * @dev Records interactions between recipients and merchants and handles payments
- * subject to user-defined access controls.
+ * @dev Records interactions between recipients and merchants
  */
 contract Usage is Ownable {
-    Identity public identity;
-    ISnapReserve public reserve;
-
-    struct TransactionRecord {
-        address recipient;
-        address merchant;
-        uint256 amount;
-        uint256 timestamp;
-    }
-
-    mapping(uint256 => TransactionRecord) public transactions;
-    uint256 public transactionCount;
-    mapping(address => uint256) public lastTransactionTime;
-
     event PaymentProcessed(
         uint256 indexed transactionId,
         address indexed recipient,
@@ -40,9 +17,26 @@ contract Usage is Ownable {
         uint256 amount
     );
 
-    constructor(address _identity, address _reserve) Ownable(msg.sender) {
-        identity = Identity(_identity);
+    IIdentity public identity;
+    ISnapReserve public reserve;
+    address private _owner;
+
+    struct TransactionRecord {
+        address recipient;
+        address merchant;
+        uint256 amount;
+        uint256 timestamp;
+        uint256 proposal;
+    }
+
+    mapping(uint256 => TransactionRecord) public transactions;
+    uint256 public transactionCount;
+    mapping(address => uint256) public lastTransactionTime;
+
+    constructor(address _identity, address _reserve, address owner) Ownable(msg.sender) {
+        identity = IIdentity(_identity);
         reserve = ISnapReserve(_reserve);
+        _owner = owner;
     }
 
     /**
@@ -50,15 +44,11 @@ contract Usage is Ownable {
      * @param recipient The address of the recipient role.
      * @param merchant The address of the merchant role.
      * @param amount The amount to be sent.
-     * @param proposalId The ID of the proposal to withdraw from.
-     * @param reserveOwner The address of the shares owner in SnapReserve.
      */
     function pay(
         address recipient,
         address merchant,
-        uint256 amount,
-        uint256 proposalId,
-        address reserveOwner
+        uint256 amount
     ) external onlyOwner {
         // 1. Verify identities
         require(
@@ -70,22 +60,22 @@ contract Usage is Ownable {
             "Not a merchant"
         );
 
-        // 2. Check preferences
+        // 2. Check preferences, should terminate if false
         _checkPreferences(recipient, merchant, amount);
-
+        uint256 proposalNum = reserve.proposalCheck();
         // 3. Record transaction
         transactionCount++;
         transactions[transactionCount] = TransactionRecord({
             recipient: recipient,
             merchant: merchant,
             amount: amount,
-            timestamp: block.timestamp
+            timestamp: block.timestamp,
+            proposal: proposalNum
         });
-        lastTransactionTime[recipient] = block.timestamp;
 
         // 4. Call SnapReserve for payment
-        reserve.proposalWithdraw(amount, merchant, reserveOwner, proposalId);
 
+        reserve.proposalWithdraw(amount, recipient, address(this), proposalNum);
         emit PaymentProcessed(transactionCount, recipient, merchant, amount);
     }
 
@@ -97,19 +87,23 @@ contract Usage is Ownable {
         address merchant,
         uint256 amount
     ) internal view {
-        Identity.Preferences memory prefs = identity.getRecipientPreferences(
+        IIdentity.Preferences memory prefs = identity.getRecipientPreferences(
             recipient
         );
 
         // check isBlocked
         require(!prefs.isBlocked, "Account is blocked");
 
-        // check approvedMerchant (if set to non-zero)
-        if (prefs.approvedMerchant != address(0)) {
-            require(
-                prefs.approvedMerchant == merchant,
-                "Merchant not approved by recipient"
-            );
+        // check approvedMerchants (if set to non-empty)
+        if (prefs.approvedMerchants.length > 0) {
+            bool merchantApproved = false;
+            for (uint256 i = 0; i < prefs.approvedMerchants.length; i++) {
+                if (prefs.approvedMerchants[i] == merchant) {
+                    merchantApproved = true;
+                    break;
+                }
+            }
+            require(merchantApproved, "Merchant not approved by recipient");
         }
 
         // check approvedAmount (if set to non-zero)

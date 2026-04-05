@@ -96,7 +96,7 @@ they MAY restart the process as if there was no address registered.
 
 Registration Flow:
 
-- Issuer deploy a tokenized reserve, a reserve token with mintng controls, an identity policy, a payment policy
+- Issuer deploy a tokenized reserve, the SNAP token with mintng controls, an identity policy contract, a usage policy contract
 - Appliciants create a wallet
 - Applicants complete applications in addition to the public address(signature),
 could provide wallet management advice.
