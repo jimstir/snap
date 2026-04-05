@@ -1,7 +1,11 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
+
 import "@openzeppelin/contracts/access/AccessControl.sol";
+import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
+import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 
 /**
  * @title Identity
@@ -24,9 +28,10 @@ contract Identity is AccessControl {
         Preferences preferences
     );
     event AccountBlocked(address indexed recipient, bool status);
-
+    bytes32 private _root;
+    
     struct Preferences {
-        //**Merchants approvedMerchants;
+        address[] approvedMerchants;
         uint256 approvedAmount; // Maximum amount per transaction
         uint256 startTime; // Hour of day (0-23)
         uint256 endTime; // Hour of day (0-23)
@@ -61,12 +66,6 @@ contract Identity is AccessControl {
     }
 
     // --- View Functions ---
-    // *** Does (address[] memory) return last entered in list or whole list
-    function getRecipientHistory(
-        address wallet
-    ) external view returns (address[] memory) {
-        return _recipients[wallet].history;
-    }
 
     function getRecipientPreferences(
         address wallet
@@ -86,6 +85,11 @@ contract Identity is AccessControl {
         return _merchants[wallet];
     }
 
+    // add merkle root
+    function addRoot(bytes32 root) public {
+        _root = root;
+    }
+
     /**
      * @dev Register a new approved recipient.
      */
@@ -96,22 +100,15 @@ contract Identity is AccessControl {
         require(!hasRole(RECIPIENT_ROLE, msg.sender), "Already registered");
         bytes32 leaf = keccak256(abi.encodePacked(msg.sender, value));
 
-        bool isValid = MerkleProof.verify(proof, merkleRoot, leaf);
+        bool isValid = MerkleProof.verify(proof, _root, leaf);
         require(isValid, "Not approved");
 
         _grantRole(RECIPIENT_ROLE, msg.sender);
-        _recipients[wallet].currentAddress = wallet;
-        _recipients[wallet].currentValue = value
+        _recipients[msg.sender].currentAddress = msg.sender;
+        _recipients[msg.sender].value = value;
         emit RecipientRegistered(true, value);
     }
 
-    /**  sign with old wallet to grant new wallet 
-    function signOld(address newWallet) external returns(bytes) {
-        bytes signature = keccak256(abi.encodePacked(msg.sender, newWallet, address(this)));
-        return (signature);
-    }
-    // add off-chain script for recipient to use
-    */
     /**
      * @dev Allow recipient to update a recipient's address.
      * Requires the recipient to sign with their previous address OR approved by ADMIN.
@@ -120,6 +117,7 @@ contract Identity is AccessControl {
         bytes calldata oldWallet,
         bool admin,
         address newWallet,
+        bytes calldata signature
     ) external {
         //require(hasRole(RECIPIENT_ROLE, oldWallet),"Old address not registered");
         //If oldWallet not entered(0x) can't update address?
@@ -131,8 +129,10 @@ contract Identity is AccessControl {
                 abi.encodePacked(oldWallet, newWallet, address(this))
             );
 
-            bytes32 ethSignedMessageHash = messageHash.toEthSignedMessageHash();
-            address signer = ethSignedMessageHash.recover(signature);
+            address signer = ECDSA.recover(
+                MessageHashUtils.toEthSignedMessageHash(messageHash),
+                signature
+            );
             require(hasRole(RECIPIENT_ROLE, signer));
             require(!hasRole(RECIPIENT_ROLE, msg.sender),
             "New address already in use"
@@ -140,9 +140,9 @@ contract Identity is AccessControl {
         }
 
         _grantRole(RECIPIENT_ROLE, newWallet);
-        _revokeRole(RECIPIENT_ROLE, signer);
+        _revokeRole(RECIPIENT_ROLE, msg.sender);
 
-        emit RecipientAddressUpdated(signer, newWallet);
+        emit RecipientAddressUpdated(msg.sender, newWallet);
     }
 
     /**
@@ -172,8 +172,8 @@ contract Identity is AccessControl {
      * @dev Recipients set all preferences at once their own preferences for access control.
      */
     function setPreferences(
-        bool[] which;
-        address approvedMerchant,
+        bool[] calldata which,
+        address[] calldata approvedMerchants,
         uint256 approvedAmount,
         uint256 startTime,
         uint256 endTime,
@@ -195,7 +195,7 @@ contract Identity is AccessControl {
         }
 
         _recipients[msg.sender].preferences = Preferences({
-            approvedMerchant: approvedMerchant,
+            approvedMerchants: approvedMerchants,
             approvedAmount: approvedAmount,
             startTime: startTime,
             endTime: endTime,
@@ -207,6 +207,12 @@ contract Identity is AccessControl {
             msg.sender,
             _recipients[msg.sender].preferences
         );
+    }
+
+    // check if prefrences is triggered
+    // BLOCKED= 1, APPROVED = 2, TIMESLOT = 3, SWIPES = 4
+    function checkTriggers() external{
+        
     }
 
     /**

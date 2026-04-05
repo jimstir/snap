@@ -7,7 +7,7 @@ pragma solidity ^0.8.20;
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/ERC4626.sol";
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
-import "../interfaces/ISnapToken.sol";
+import "./interfaces/ISnapToken.sol";
 
 contract SnapReserve is ERC4626 {
     using SafeERC20 for IERC20;
@@ -33,14 +33,14 @@ contract SnapReserve is ERC4626 {
         address depositor
     );
 
-    /**  @dev deposit event
+    // @dev deposit event
     event FundsAdded(
         address indexed token,
         uint256 indexed amount,
         uint256 indexed time,
         address sender
     );
-    */
+    
     struct userAccount {
         uint256 proposal;
         uint256 deposit;
@@ -62,6 +62,7 @@ contract SnapReserve is ERC4626 {
         address owner; // address of contract or wallet
         uint256 time; // time of deposit
         uint256 proposalNum;
+        uint256 num;
     }
 
     address private _tOwner;
@@ -72,7 +73,7 @@ contract SnapReserve is ERC4626 {
     address private _usageAddr;
 
     address private _reserve;
-    IERC20 private _reserveToken;
+    IERC20 private _snapToken;
 
     mapping(address => bool) private _authUsers;
     mapping(uint256 => uint256) private _totalShares;
@@ -83,19 +84,19 @@ contract SnapReserve is ERC4626 {
     // proposal Accounting
     mapping(uint256 => proposalAccount) internal proposalBook;
 
-    /**  Record deposits for reference
+    //Record deposits for reference
     mapping(uint256 => UserDeposit) internal addFunds;
-    */
+    
 
     bool private _allowInternal = false;
 
     constructor(
-        IERC20 tToken,
+        IERC20 token,
         string memory name,
         string memory symbol
-    ) ERC20(name, symbol) ERC4626(tToken) {
+    ) ERC20(name, symbol) ERC4626(token) {
         _tOwner = msg.sender;
-        _treasuryToken = tToken;
+        _snapToken = token;
     }
 
     /** @dev Primary authorized user modifier */
@@ -104,17 +105,11 @@ contract SnapReserve is ERC4626 {
         _;
     }
 
-    /** @dev Get the reserve name
-     *
-     */
-    function reserveAddress() public view returns (string memory) {
-        return _reserve;
-    }
     /** @dev Get the reserve token address
      *
      */
     function reserveToken() public view returns (address) {
-        return address(_reserveToken);
+        return address(_snapToken);
     }
 
     /**
@@ -232,8 +227,6 @@ contract SnapReserve is ERC4626 {
     function addUsuageAddr(address id) external auth{
         _usageAddr = id;
     }
-
-
 
     /** @dev Make a deposit to proposal creating new shares
      * - MUST be open proposal
@@ -395,9 +388,10 @@ contract SnapReserve is ERC4626 {
         address sender
     ) external virtual returns (bool) {
         require(amount > 0, "Amount must be greater than zero");
-        UserDeposit storage deposits = addFunds[_depositNum];
+        
         _depositNum = _depositNum + 1;
-
+        UserDeposit storage deposits = addFunds[_depositNum];
+        
         deposits.num = _depositNum;
         deposits.amount = amount;
         deposits.token = token;

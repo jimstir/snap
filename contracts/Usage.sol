@@ -2,6 +2,7 @@
 pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 import "./interfaces/IIdentity.sol";
 import "./interfaces/ISnapReserve.sol";
 /**
@@ -22,9 +23,10 @@ contract Usage is Ownable {
     struct TransactionRecord {
         address recipient;
         address merchant;
-    uint256 amount;
-    uint256 timestamp;
-    uint256 proposal;
+        uint256 amount;
+        uint256 timestamp;
+        uint256 proposal;
+    }
     mapping(uint256 => TransactionRecord) public transactions;
     uint256 public transactionCount;
     mapping(address => uint256) public lastTransactionTime;
@@ -49,9 +51,11 @@ contract Usage is Ownable {
         require(
             identity.hasRole(identity.RECIPIENT_ROLE(), recipient),
             "Not a recipient"
+        );
         require(
             identity.hasRole(identity.MERCHANT_ROLE(), merchant),
             "Not a merchant"
+        );
     // 2. Check preferences, should terminate if false
     _checkPreferences(recipient, merchant, amount);
     uint256 proposalNum = reserve.proposalCheck();
@@ -67,6 +71,7 @@ contract Usage is Ownable {
     // 4. Call SnapReserve for payment
     reserve.proposalWithdraw(amount, address(this), _owner, proposalNum);
     emit PaymentProcessed(transactionCount, recipient, merchant, amount);
+    }
     /**
      * @dev Internal check for recipient-defined access controls.
      */
@@ -100,7 +105,7 @@ contract Usage is Ownable {
                 amount <= prefs.approvedAmount,
                 "Amount exceeds recipient limit"
             );
-    }
+        }
 
     // check time of day (startTime/endTime as 0-23 index)
         if (prefs.startTime != 0 || prefs.endTime != 0) {
@@ -119,6 +124,7 @@ contract Usage is Ownable {
                     "Outside approved hours"
                 );
             }
+        }
 
         // check timeLimit (cooldown)
         if (prefs.timeLimit > 0) {

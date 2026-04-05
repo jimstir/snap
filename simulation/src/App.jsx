@@ -7,6 +7,7 @@ import { useWeb3 } from './hooks/useWeb3';
 import Registration from './pages/Registration';
 import AccessControl from './pages/AccessControl';
 import Transaction from './pages/Transaction';
+import Issuer from './pages/Issuer';
 
 const App = () => {
   const { account, error, connect } = useWeb3();
@@ -24,6 +25,7 @@ const App = () => {
             <NavLink to="/" className={({ isActive }) => isActive ? 'active' : ''}>Registration</NavLink>
             <NavLink to="/access" className={({ isActive }) => isActive ? 'active' : ''}>Access Control</NavLink>
             <NavLink to="/transaction" className={({ isActive }) => isActive ? 'active' : ''}>Simulation</NavLink>
+            <NavLink to="/issuer" className={({ isActive }) => isActive ? 'active' : ''}>Issuer</NavLink>
           </div>
 
           <button className="btn btn-primary" onClick={connect}>
@@ -43,6 +45,7 @@ const App = () => {
             <Route path="/" element={<Registration />} />
             <Route path="/access" element={<AccessControl />} />
             <Route path="/transaction" element={<Transaction />} />
+            <Route path="/issuer" element={<Issuer />} />
           </Routes>
         </main>
       </div>
