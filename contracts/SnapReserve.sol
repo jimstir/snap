@@ -52,6 +52,8 @@ contract SnapReserve is ERC4626 {
         address policy; // the identity policy for this proposal
         IERC20 token; // token being deposited
         uint256 time; // time of proposalOpen
+        uint256 withdraw; // amount to be withdrawn (added for getProposalInfo)
+        address receiver; // receiver address (added for getProposalInfo)
     }
 
     struct UserDeposit {
@@ -301,10 +303,11 @@ contract SnapReserve is ERC4626 {
         address receiver,
         address owner,
         uint256 proposal
-    ) external virtual (uint256) {
-        require(closedProposal(proposal), "Proposal not closed");
+    ) external virtual returns (uint256) {
+        // Only allow withdrawal if the proposal is open (not closed)
+        require(!closedProposal(proposal), "Proposal is closed");
         require(
-            userWithdrew(receiver, proposal) >= userDeposit(receiver, proposal),
+            userDeposit(receiver, proposal) >= assets,
             "Invalid withdraw amount for proposal"
         );
 
@@ -354,17 +357,18 @@ contract SnapReserve is ERC4626 {
      * @param token the token address
      * 
      */
-    function proposalOpen(uint256 amount, address policy, IERC20 token
+    function proposalOpen(
+        uint256 amount,
+        address policy,
+        IERC20 token
     ) external virtual auth returns (uint256) {
-        
         uint256 num = proposalCheck() + 1;
         proposalBook[num].token = token;
         proposalBook[num].withdraw = amount;
         proposalBook[num].policy = policy;
         _proposalNum = num;
 
-        proposalDeposit(amount, policy, _proposalNum);
-        emit proposalO(address(token), num, amount, receiver);
+        emit proposalO(address(token), num, amount, policy);
         return (num);
     }
     /** @dev Close an opened proposal
