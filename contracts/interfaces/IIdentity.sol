@@ -12,6 +12,11 @@ interface IIdentity {
     }
     function RECIPIENT_ROLE() external view returns (bytes32);
     function MERCHANT_ROLE() external view returns (bytes32);
-    function hasRole(bytes32 role, address account) external view returns (bool);
-    function getRecipientPreferences(address wallet) external view returns (Preferences memory);
+    function hasRole(
+        bytes32 role,
+        address account
+    ) external view returns (bool);
+    function getRecipientPreferences(
+        address wallet
+    ) external view returns (Preferences memory);
 }

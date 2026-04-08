@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.20;
 
-
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
@@ -28,7 +27,6 @@ contract Identity is AccessControl {
         Preferences preferences
     );
     event AccountBlocked(address indexed recipient, bool status);
-    bytes32 private _root;
     
     struct Preferences {
         address[] approvedMerchants;
@@ -41,7 +39,7 @@ contract Identity is AccessControl {
 
     struct RecipientRecord {
         address currentAddress;
-        //address[] history; // maybe remove?
+        //address[] history; // remove?
         uint256 value; //current approved value
         Preferences preferences;
     }
@@ -50,6 +48,7 @@ contract Identity is AccessControl {
         address wallet;
         uint256 externalId; // Optional external identifier (e.g., POS ID)
     }
+    bytes32 private _root;
 
     // Mapping from a unique recipient ID (could be social security or internal ID)
     // to their historical and current wallet information.
@@ -86,8 +85,9 @@ contract Identity is AccessControl {
     }
 
     // add merkle root
-    function addRoot(bytes32 root) public {
+    function addRoot(bytes32 root) external onlyRole(ISSUER_ROLE) returns(bool){
         _root = root;
+        return (true);
     }
 
     /**
@@ -116,33 +116,32 @@ contract Identity is AccessControl {
     function updateRecipientAddress(
         bytes calldata oldWallet,
         bool admin,
-        address newWallet,
         bytes calldata signature
     ) external {
-        //require(hasRole(RECIPIENT_ROLE, oldWallet),"Old address not registered");
-        //If oldWallet not entered(0x) can't update address?
-        if(admin){
+        address signer;
+
+        if (admin) {
             require(hasRole(DEFAULT_ADMIN_ROLE, msg.sender));
-        }else{
-            
+        } else {
             bytes32 messageHash = keccak256(
-                abi.encodePacked(oldWallet, newWallet, address(this))
+                abi.encodePacked(oldWallet, msg.sender, address(this))
             );
 
-            address signer = ECDSA.recover(
+            signer = ECDSA.recover(
                 MessageHashUtils.toEthSignedMessageHash(messageHash),
                 signature
             );
             require(hasRole(RECIPIENT_ROLE, signer));
-            require(!hasRole(RECIPIENT_ROLE, msg.sender),
-            "New address already in use"
+            require(
+                !hasRole(RECIPIENT_ROLE, msg.sender),
+                "New address already in use"
             );
         }
 
-        _grantRole(RECIPIENT_ROLE, newWallet);
-        _revokeRole(RECIPIENT_ROLE, msg.sender);
+        _grantRole(RECIPIENT_ROLE, msg.sender);
+        _revokeRole(RECIPIENT_ROLE, signer);
 
-        emit RecipientAddressUpdated(msg.sender, newWallet);
+        emit RecipientAddressUpdated(signer, msg.sender);
     }
 
     /**
@@ -152,11 +151,25 @@ contract Identity is AccessControl {
         bytes32[] calldata proof,
         bool admin,
         uint256 externalId,
-        address wallet
-    ) external onlyRole(ISSUER_ROLE) {
-        require(!hasRole(MERCHANT_ROLE, wallet), "Merchant already registered");
-        if(admin){
+        address wallet,
+        bytes calldata signature
+    ) external {
+        address signer;
+        
+        if (!admin) {
             require(hasRole(DEFAULT_ADMIN_ROLE, msg.sender));
+        }else {
+            require(!hasRole(MERCHANT_ROLE, msg.sender), "Merchant already registered");
+            // check proof from issuer
+            bytes32 messageHash = keccak256(
+                abi.encodePacked(msg.sender, address(this))
+            );
+
+            signer = ECDSA.recover(
+                MessageHashUtils.toEthSignedMessageHash(messageHash),
+                signature
+            );
+
         }
         _grantRole(MERCHANT_ROLE, wallet);
         _merchants[wallet] = MerchantRecord(wallet, externalId);
@@ -180,19 +193,13 @@ contract Identity is AccessControl {
         uint256 timeLimit
     ) external {
         // require is recipient role
-        
+
         // update which approved merchant, max amount here(approvedAmount)
-        if(which[0]){
-            
-        }
+        if (which[0]) {}
         // update the startTime and endTime for card use
-        if(which[1]){
-
-        }
+        if (which[1]) {}
         // update the swipe count limit( access control check limit)
-        if(which[2]){
-
-        }
+        if (which[2]) {}
 
         _recipients[msg.sender].preferences = Preferences({
             approvedMerchants: approvedMerchants,
@@ -211,8 +218,8 @@ contract Identity is AccessControl {
 
     // check if prefrences is triggered
     // BLOCKED= 1, APPROVED = 2, TIMESLOT = 3, SWIPES = 4
-    function checkTriggers() external{
-        
+    function checkTriggers() external {
+
     }
 
     /**

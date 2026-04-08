@@ -11,9 +11,9 @@ import "./interfaces/ISnapReserve.sol";
  */
 contract Usage is Ownable {
     event PaymentProcessed(
-    uint256 indexed transactionId,
-    address indexed recipient,
-    address indexed merchant,
+        uint256 indexed transactionId,
+        address indexed recipient,
+        address indexed merchant,
         uint256 amount
     );
 
@@ -30,7 +30,11 @@ contract Usage is Ownable {
     mapping(uint256 => TransactionRecord) public transactions;
     uint256 public transactionCount;
     mapping(address => uint256) public lastTransactionTime;
-    constructor(address _identity, address _reserve, address owner) Ownable(msg.sender) {
+    constructor(
+        address _identity,
+        address _reserve,
+        address owner
+    ) Ownable(msg.sender) {
         identity = IIdentity(_identity);
         reserve = ISnapReserve(_reserve);
         _owner = owner;
@@ -39,9 +43,9 @@ contract Usage is Ownable {
     /**
      * @dev Process a payment after verifying recipient preferences.
      * @param recipient The address of the recipient role.
-    * @param merchant The address of the merchant role.
-    * @param amount The amount to be sent.
-    */
+     * @param merchant The address of the merchant role.
+     * @param amount The amount to be sent.
+     */
     function pay(
         address recipient,
         address merchant,
@@ -56,21 +60,21 @@ contract Usage is Ownable {
             identity.hasRole(identity.MERCHANT_ROLE(), merchant),
             "Not a merchant"
         );
-    // 2. Check preferences, should terminate if false
-    _checkPreferences(recipient, merchant, amount);
-    uint256 proposalNum = reserve.proposalCheck();
-    // 3. Record transaction
-    transactionCount++;
-    transactions[transactionCount] = TransactionRecord({
+        // 2. Check preferences, should terminate if false
+        _checkPreferences(recipient, merchant, amount);
+        uint256 proposalNum = reserve.proposalCheck();
+        // 3. Record transaction
+        transactionCount++;
+        transactions[transactionCount] = TransactionRecord({
             recipient: recipient,
             merchant: merchant,
             amount: amount,
             timestamp: block.timestamp,
             proposal: proposalNum
         });
-    // 4. Call SnapReserve for payment
-    reserve.proposalWithdraw(amount, address(this), _owner, proposalNum);
-    emit PaymentProcessed(transactionCount, recipient, merchant, amount);
+        // 4. Call SnapReserve for payment
+        reserve.proposalWithdraw(amount, address(this), _owner, proposalNum);
+        emit PaymentProcessed(transactionCount, recipient, merchant, amount);
     }
     /**
      * @dev Internal check for recipient-defined access controls.
@@ -84,8 +88,8 @@ contract Usage is Ownable {
             recipient
         );
 
-    // check isBlocked
-    require(!prefs.isBlocked, "Account is blocked");
+        // check isBlocked
+        require(!prefs.isBlocked, "Account is blocked");
 
         // check approvedMerchants (if set to non-empty)
         if (prefs.approvedMerchants.length > 0) {
@@ -107,7 +111,7 @@ contract Usage is Ownable {
             );
         }
 
-    // check time of day (startTime/endTime as 0-23 index)
+        // check time of day (startTime/endTime as 0-23 index)
         if (prefs.startTime != 0 || prefs.endTime != 0) {
             uint256 currentHour = (block.timestamp / 3600) % 24;
             // Handle cross-day ranges (e.g. 23 to 01)
