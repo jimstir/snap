@@ -34,7 +34,7 @@ The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT", "SHOULD", "S
 [RFC 2119](http://tools.ietf.org/html/rfc2119).
 
 The [Arc](na) blockchain MAY to take advantage of USDC stablecoins as gass fees for trasactions.
-This is important as this proposal aims to support a government program which currently does not support the use of native cryptocurrenies like Ethereum.(Genius Act??*)
+This is important as this proposal aims to support a government program which currently does not support the use of native cryptocurrenies like Ethereum.
 For SNAP, the US dollar is required.
 Stablecoins intorduce an alternative to coins like Ethereum while still meeting the United States dollar requirement.
 Also, as the program continues to intergrate blockchain solutions,
@@ -138,38 +138,6 @@ The attacker successfully steals reciptant information:
 - user not able to vote
 - retrict token transfers
 
-``` solidity
-
-function register(){
-    // user identity
-    //merchant identity
-    // access controls(prefrences)
-
-
-}
-
-
-```
-
-### Identity
-
-The issuer,
-
-- approved applicant controls
-- check during EMVco cycle
-- approved store, approved amount, approved time of day, amount time per time period for a approved merchant(one swipe per day)
--
-
-#### Card Skimming
-
-If an attacker is able to successfully steal a recipitant card information,
-the attacker MUST NOT be able to use the card on failing access controls calls.
-The recipitant MAY be notified if when access controls attempt has failed.
-The recipitant SHOULD be able to block card().
-
-
-### M
-
 During registration, the issuer MUST have deployed a tokenized reserve contract and
 a identity contract.
 The first proposal on the SHOULD be assigned to the identity contract address.
@@ -186,6 +154,35 @@ struct proposalOpen {
 }
 
 
+```
+### Identity
+
+``` solidity
+
+function register(){
+    // user identity
+    //merchant identity
+    // access controls(prefrences)
+}
+
+```
+- approved applicant controls
+- check during EMVco cycle
+- approved store, approved amount, approved time of day, amount time per time period for a approved merchant(ex. one swipe per day)
+-
+
+#### Card Skimming
+
+If an attacker is able to successfully steal a recipitant card information,
+the attacker MUST NOT be able to use the card on failing access controls calls.
+The recipitant MAY be notified if when access controls attempt has failed.
+The recipitant SHOULD be able to block card().
+
+
+### Usage
+
+```solidity
+
 function pay(address user, addreess merchant){
     // require merchant registered
     // check access control
@@ -194,9 +191,10 @@ function pay(address user, addreess merchant){
 
 ```
 
-
 ## Copyright
 
 Copyright and related rights waived via [CC0](https://creativecommons.org/publicdomain/zero/1.0/)
 
 ## References
+
+- [Tokenized Reserve - ERC7425](https://eips.ethereum.org/EIPS/eip-7425)

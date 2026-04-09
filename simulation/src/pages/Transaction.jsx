@@ -1,31 +1,56 @@
 import React, { useState } from 'react';
-import { CreditCard, Store, CheckCircle2, AlertTriangle, Loader2 } from 'lucide-react';
+import { ethers } from 'ethers';
+import { CreditCard, Store, CheckCircle2, AlertTriangle, Loader2, Info } from 'lucide-react';
+import { useWeb3 } from '../hooks/useWeb3';
+import UsageJSON from '../utils/artifacts/Usage.json';
 
 const Transaction = () => {
+  const { provider, deployedAddresses } = useWeb3();
   const [recipient, setRecipient] = useState('');
   const [merchant, setMerchant] = useState('');
   const [amount, setAmount] = useState('');
   const [status, setStatus] = useState('idle'); // idle, loading, success, error
   const [txDetails, setTxDetails] = useState(null);
 
-  const simulateSwipe = async (e) => {
+  const handleSwipe = async (e) => {
     e.preventDefault();
-    setStatus('loading');
+    if (!deployedAddresses?.Usage || !provider) return;
 
-    // Simulate contract interaction and access control check
-    setTimeout(() => {
-      // For simulation: if amount > 1000, fail (mock preference)
-      if (amount > 1000) {
-        setStatus('error');
-        setTxDetails('Transaction Rejected: Amount exceeds recipient daily limit ($1,000)');
-      } else {
-        setStatus('success');
-        setTxDetails({
-          hash: '0x' + Math.random().toString(16).substring(2, 42),
-          time: new Date().toLocaleTimeString(),
-        });
-      }
-    }, 2000);
+    setStatus('loading');
+    setTxDetails(null);
+
+    try {
+      const signer = await provider.getSigner();
+      const usage = new ethers.Contract(deployedAddresses.Usage, UsageJSON.abi, signer);
+
+      // Call Usage.pay(recipient, merchant, amount)
+      // Note: amount is in 18 decimals (USDC simulation)
+      const tx = await usage.pay(
+        recipient,
+        merchant,
+        ethers.parseUnits(amount, 18)
+      );
+
+      const receipt = await tx.wait();
+      
+      // Parse logs for events
+      const logs = receipt.logs.map(log => {
+        try {
+          return usage.interface.parseLog(log);
+        } catch (e) { return null; }
+      }).filter(Boolean);
+
+      setStatus('success');
+      setTxDetails({
+        hash: receipt.hash,
+        time: new Date().toLocaleTimeString(),
+        events: logs
+      });
+    } catch (err) {
+      console.error(err);
+      setStatus('error');
+      setTxDetails(err.reason || err.message || 'Transaction failed');
+    }
   };
 
   return (
@@ -35,6 +60,20 @@ const Transaction = () => {
         <p style={{ color: 'var(--text-dim)' }}>Simulate a retail transaction to test the SNAP Trust layer protection.</p>
       </header>
 
+      {!deployedAddresses && (
+        <div className="card glass animate-fade-in" style={{ borderColor: 'var(--danger)', background: 'rgba(239,68,68,0.05)', marginBottom: '32px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--danger)' }}>
+            <AlertTriangle size={24} />
+            <div>
+              <h3 style={{ fontSize: '1.1rem' }}>Infrastructure Not Detected</h3>
+              <p style={{ fontSize: '0.875rem', color: 'var(--text-dim)', marginTop: '4px' }}>
+                The core contracts are not yet deployed. Please go to the <strong>Issuer</strong> tab to deploy the reserve system first.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div className="grid">
         <div className="card glass">
           <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '32px' }}>
@@ -42,14 +81,14 @@ const Transaction = () => {
             <h2 style={{ fontSize: '1.5rem' }}>POS Terminal</h2>
           </div>
 
-          <form onSubmit={simulateSwipe}>
+          <form onSubmit={handleSwipe}>
             <div className="input-group">
-              <label className="label">Merchant Identity (External ID or Wallet)</label>
+              <label className="label">Merchant Wallet Address</label>
               <div style={{ position: 'relative' }}>
                 <Store size={18} style={{ position: 'absolute', left: '16px', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-dim)' }} />
                 <input 
                   style={{ paddingLeft: '48px' }} 
-                  placeholder="e.g. Walmart POS-442" 
+                  placeholder="0x..." 
                   value={merchant}
                   onChange={(e) => setMerchant(e.target.value)}
                   required
@@ -58,7 +97,7 @@ const Transaction = () => {
             </div>
 
             <div className="input-group">
-              <label className="label">Recipient Wallet</label>
+              <label className="label">Recipient Wallet Address</label>
               <input 
                 placeholder="0x..." 
                 value={recipient}
@@ -78,12 +117,12 @@ const Transaction = () => {
               />
             </div>
 
-            <button className="btn btn-primary" style={{ width: '100%', padding: '16px' }} disabled={status === 'loading'}>
+            <button className="btn btn-primary" style={{ width: '100%', padding: '16px' }} disabled={status === 'loading' || !deployedAddresses}>
               {status === 'loading' ? (
                 <>
-                  <Loader2 className="animate-spin" size={18} /> Verifying Preferences...
+                  <Loader2 className="animate-spin" size={18} /> Validating & Processing...
                 </>
-              ) : 'Swipe Card'}
+              ) : 'Swipe Card (Issuer Call)'}
             </button>
           </form>
         </div>
@@ -97,9 +136,21 @@ const Transaction = () => {
               </div>
               <div style={{ color: 'var(--text-dim)', fontSize: '0.875rem', lineHeight: '1.8' }}>
                 <p><strong>Status:</strong> Confirmed on Arc Testnet</p>
-                <p><strong>Hash:</strong> <span style={{ fontFamily: 'monospace' }}>{txDetails.hash}</span></p>
-                <p><strong>Timestamp:</strong> {txDetails.time}</p>
-                <p><strong>Reserve Logged:</strong> Approved by Usage Policy</p>
+                <p><strong>Hash:</strong> <span style={{ fontFamily: 'monospace', wordBreak: 'break-all' }}>{txDetails.hash}</span></p>
+                <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid rgba(16, 185, 129, 0.2)' }}>
+                  <h4 style={{ color: 'var(--success)', marginBottom: '8px' }}>Events Emitted:</h4>
+                  {txDetails.events.map((ev, i) => (
+                    <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '8px', background: 'rgba(16, 185, 129, 0.1)', padding: '8px', borderRadius: '8px' }}>
+                      <Info size={14} style={{ marginTop: '3px' }} />
+                      <div>
+                        <div style={{ fontWeight: '600', color: 'white' }}>{ev.name}</div>
+                        <p style={{ fontSize: '0.75rem', color: 'var(--text-dim)' }}>
+                          Recipient notified and reserve record committed.
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           )}
@@ -108,11 +159,11 @@ const Transaction = () => {
             <div className="card glass animate-fade-in" style={{ borderColor: 'var(--danger)', background: 'rgba(239, 68, 68, 0.05)' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: '12px', color: 'var(--danger)', marginBottom: '16px' }}>
                 <AlertTriangle size={24} />
-                <h3 style={{ fontSize: '1.25rem' }}>Transaction Blocked</h3>
+                <h3 style={{ fontSize: '1.25rem' }}>Transaction Reverted</h3>
               </div>
               <p style={{ color: 'var(--text)', fontSize: '0.95rem', marginBottom: '12px' }}>{txDetails}</p>
               <p style={{ color: 'var(--text-dim)', fontSize: '0.875rem' }}>
-                The trust layer prevented this transaction because it violated one or more security preferences.
+                The trust layer refused to process this transaction. Common reasons include whitelisting failure, daily limit exceedance, or insufficient reserve balance.
               </p>
             </div>
           )}
@@ -120,7 +171,7 @@ const Transaction = () => {
           {status === 'idle' && (
             <div className="card glass" style={{ borderStyle: 'dashed', opacity: 0.6 }}>
               <p style={{ textAlign: 'center', color: 'var(--text-dim)' }}>
-                Waiting for payment interaction...
+                Waiting for POS interaction...
               </p>
             </div>
           )}
