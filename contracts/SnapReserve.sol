@@ -246,14 +246,14 @@ contract SnapReserve is ERC4626 {
         uint256 shares = super.deposit(assets, receiver);
         _allowInternal = false;
         _totalShares[proposal] = add(totalShares(proposal), shares);
-        uint256 cc = userNumOfProposal(msg.sender) + 1;
-        userBook[msg.sender][proposal].deposit = add(
+        uint256 cc = userNumOfProposal(receiver) + 1;
+        userBook[receiver][proposal].deposit = add(
             userDeposit(receiver, proposal),
             shares
         );
 
-        userBook[msg.sender][0].proposal = cc;
-        userBook[msg.sender][cc].proposal = proposal;
+        userBook[receiver][0].proposal = cc;
+        userBook[receiver][cc].proposal = proposal;
         emit DepositMade(proposal, assets, msg.sender);
     }
 

@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
 import "@openzeppelin/contracts/utils/cryptography/ECDSA.sol";
 import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
+import "./interfaces/ISnapReserve.sol";
 
 /**
  * @title Identity
@@ -49,6 +50,7 @@ contract Identity is AccessControl {
         uint256 externalId; // Optional external identifier (e.g., POS ID)
     }
     bytes32 private _root;
+    ISnapReserve public reserve;
 
     // Mapping from a unique recipient ID (could be social security or internal ID)
     // to their historical and current wallet information.
@@ -59,12 +61,18 @@ contract Identity is AccessControl {
     // Tracking merchant addresses by their external ID
     mapping(uint256 => address) private _idToMerchant;
 
-    constructor(address issuer) {
+    constructor(address issuer, address _reserve) {
         _grantRole(DEFAULT_ADMIN_ROLE, issuer);
         _grantRole(ISSUER_ROLE, issuer);
+        reserve = ISnapReserve(_reserve);
     }
 
     // --- View Functions ---
+    
+    // check the reserve address
+    function checkReserve() external view returns(ISnapReserve){
+        return(reserve);
+    }
 
     function getRecipientPreferences(
         address wallet
@@ -84,6 +92,10 @@ contract Identity is AccessControl {
         return _merchants[wallet];
     }
 
+    //check if recipient set to BLOCK
+    function checkBlock(address recipient) public view returns(bool){
+        return(_recipients[recipient].preferences.isBlocked);
+    }
     // add merkle root
     function addRoot(bytes32 root) external onlyRole(ISSUER_ROLE) returns(bool){
         _root = root;
@@ -148,27 +160,26 @@ contract Identity is AccessControl {
      * @dev Register a new merchant with optional admin.
      */
     function registerMerchant(
-        bytes32[] calldata proof,
         bool admin,
         uint256 externalId,
         address wallet,
         bytes calldata signature
     ) external {
         address signer;
-        
+
         if (!admin) {
             require(hasRole(DEFAULT_ADMIN_ROLE, msg.sender));
         }else {
             require(!hasRole(MERCHANT_ROLE, msg.sender), "Merchant already registered");
-            // check proof from issuer
+            // check signature from issuer
             bytes32 messageHash = keccak256(
                 abi.encodePacked(msg.sender, address(this))
             );
-
             signer = ECDSA.recover(
                 MessageHashUtils.toEthSignedMessageHash(messageHash),
                 signature
             );
+            require(hasRole(ISSUER_ROLE, signer));
 
         }
         _grantRole(MERCHANT_ROLE, wallet);
@@ -186,41 +197,43 @@ contract Identity is AccessControl {
      */
     function setPreferences(
         bool[] calldata which,
-        address[] calldata approvedMerchants,
-        uint256 approvedAmount,
+        address[] calldata approvedMer,
+        uint256 amount,
         uint256 startTime,
         uint256 endTime,
         uint256 timeLimit
-    ) external {
+    ) external onlyRole(RECIPIENT_ROLE) {
         // require is recipient role
-
+        Preferences storage user = _recipients[msg.sender].preferences;
         // update which approved merchant, max amount here(approvedAmount)
-        if (which[0]) {}
+        if (which[0]) {
+            // Append new approvedMerchants to the end of the list (do not clear existing)
+            for (uint i = 0; i < approvedMer.length; i++) {
+                user.approvedMerchants.push(approvedMer[i]);
+            }
+            user.approvedAmount = amount;
+        }
         // update the startTime and endTime for card use
-        if (which[1]) {}
+        if (which[1]) {
+            user.startTime = startTime;
+            user.endTime = endTime;
+        }
         // update the swipe count limit( access control check limit)
-        if (which[2]) {}
+        if (which[2]) {
+            user.timeLimit = timeLimit;
+        }
 
-        _recipients[msg.sender].preferences = Preferences({
-            approvedMerchants: approvedMerchants,
-            approvedAmount: approvedAmount,
-            startTime: startTime,
-            endTime: endTime,
-            timeLimit: timeLimit,
-            isBlocked: _recipients[msg.sender].preferences.isBlocked
-        });
+        emit PreferencesUpdated(msg.sender, user);
 
-        emit PreferencesUpdated(
-            msg.sender,
-            _recipients[msg.sender].preferences
-        );
     }
 
-    // check if prefrences is triggered
+    /**
+    // Record if a prefrences check failed
     // BLOCKED= 1, APPROVED = 2, TIMESLOT = 3, SWIPES = 4
     function checkTriggers() external {
 
     }
+    */
 
     /**
      * @dev Block/Unblock the account. Useful for card skimming defense.

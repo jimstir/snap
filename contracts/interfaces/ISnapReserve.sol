@@ -14,4 +14,5 @@ interface ISnapReserve {
         view
         returns (address token, uint256 withdrawAmount, address receiver);
     function balanceOf(address account) external view returns (uint256);
+    function proposalDeposit(uint256 assets, address receiver, uint256 proposal) external;
 }

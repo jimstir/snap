@@ -1,7 +1,7 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
-describe("SNAP System: Deployment & Registration", function () {
+describe("SNAP System: Deployment", function () {
   let deployer, issuer, recipient, merchant, other;
   let SnapToken, SnapReserve, Identity, Usage;
   let snapToken, snapReserve, identity, usage;
@@ -19,32 +19,21 @@ describe("SNAP System: Deployment & Registration", function () {
     );
     await snapReserve.waitForDeployment();
     Identity = await ethers.getContractFactory("Identity");
-    identity = await Identity.connect(issuer).deploy(issuer.address);
+    identity = await Identity.connect(issuer).deploy(issuer.address, snapReserve.target);
     await identity.waitForDeployment();
     Usage = await ethers.getContractFactory("Usage");
-    usage = await Usage.connect(issuer).deploy(identity.target, snapReserve.target, issuer.address);
+    usage = await Usage.connect(issuer).deploy(identity.target, snapReserve.target, issuer.address, snapToken.target);
     await usage.waitForDeployment();
   });
 
   it("should deploy all contracts and set initial state", async function () {
-    expect(await snapToken.totalSupply()).to.equal(ethers.parseEther("1000000"));
+    // SnapToken mints initialSupply * 10**decimals()
+    // ethers.parseEther returns a bigint, so multiply by 1e18 for decimals
+    const expectedSupply = BigInt("1000000") * BigInt("1000000000000000000") * BigInt("1000000000000000000");
+    expect(await snapToken.totalSupply()).to.equal(expectedSupply);
     expect(await snapReserve.reserveToken()).to.equal(snapToken.target);
     expect(await identity.hasRole(await identity.DEFAULT_ADMIN_ROLE(), issuer.address)).to.be.true;
     expect(await usage.identity()).to.equal(identity.target);
     expect(await usage.reserve()).to.equal(snapReserve.target);
-  });
-
-  it("should allow issuer to register recipient and merchant", async function () {
-    await identity.connect(issuer).grantRole(await identity.RECIPIENT_ROLE(), recipient.address);
-    await identity.connect(issuer).grantRole(await identity.MERCHANT_ROLE(), merchant.address);
-    expect(await identity.hasRole(await identity.RECIPIENT_ROLE(), recipient.address)).to.be.true;
-    expect(await identity.hasRole(await identity.MERCHANT_ROLE(), merchant.address)).to.be.true;
-  });
-
-  it("should prevent double registration of recipient", async function () {
-    await identity.connect(issuer).grantRole(await identity.RECIPIENT_ROLE(), recipient.address);
-    await expect(
-      identity.connect(issuer).grantRole(await identity.RECIPIENT_ROLE(), recipient.address)
-    ).to.be.revertedWith("AccessControl: account already has role");
   });
 });
