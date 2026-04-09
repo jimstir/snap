@@ -115,8 +115,6 @@ Payment Flow:
 - Identifies the recipiant and calls access controls on-chain
     1. If approved, issuer makes on-chain record of successful transaction
     2. If failed, send status to USDA system(system sends fail to POS)
-- V
--
 
 Fraud Flow:
 
@@ -153,7 +151,9 @@ function register(){
 
 ```
 
-### Access Controls
+### Identity
+
+The issuer,
 
 - approved applicant controls
 - check during EMVco cycle
